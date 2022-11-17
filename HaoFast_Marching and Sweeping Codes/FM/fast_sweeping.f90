@@ -1,0 +1,210 @@
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    module fsdata
+      integer(4) :: M = 151
+      integer(4) :: N 
+      integer(4) :: nbp
+
+      integer(4), allocatable :: s(:,:)
+      real(8),    allocatable :: T(:,:)
+      real(8),    allocatable :: b(:,:,:)
+    end module
+!---------------------------------------------------------<
+
+
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    program fm_all
+      use fsdata
+      implicit none
+
+      integer(4) :: i, j, k, ij(2)
+      real(8)    :: deg
+      real(8)    :: cmp, Tw, Te, Ts, Tn, Tij, Fij
+
+      real(8), external :: bsch
+
+      character  :: fname*256, c*5
+      real(8)    :: L, dr(2)
+
+      N = (M-1)*2+1
+
+      ! global initialisation
+      allocate(s(N,N), T(N,N))
+      T = 1.0D10
+      s = 2
+
+      ! define the BCs & scaling
+      read (*,'(A)') fname
+      open (1, file=trim(fname))
+
+      read (1,*) c, nbp
+      allocate(b(2,nbp,1))
+
+      read (1,*) b(:,:,1)
+      close(1)
+
+!#if defined DEBUG
+!print*, nbp, b(:,nbp,1)
+!#endif
+       L = max(maxval(b(1,:,1))-minval(b(1,:,1)), maxval(b(2,:,1))-minval(b(2,:,1)))
+!!     dr(1) = sum(b(1,:,1)) / dble(nbp)
+!1     dr(2) = sum(b(2,:,1)) / dble(nbp)
+       dr(1) = (maxval(b(1,:,1)) + minval(b(1,:,1))) / 2
+       dr(2) = (maxval(b(2,:,1)) + minval(b(2,:,1))) / 2
+!#if defined DEBUG
+!print*, 'dr and L are:', dr, L
+!#endif
+      b(1,:,1) = (b(1,:,1) - dr(1)) / L * 1.00D0*dble(M-1) + dble(M-1)
+      b(2,:,1) = (b(2,:,1) - dr(2)) / L * 1.00D0*dble(M-1) + dble(M-1)
+
+      open (2,file='bcurve.dat')
+      write(2,*) 'TITLE="boundary"'
+      write(2,*) 'VARIABLES="X", "Y"'
+      write(2,*) 'ZONE T="boundary"'
+      write(2,   '(X,3(A,I0),A)') 'I=', nbp, ', J=', 1, ', K=', 1, ', ZONETYPE=Ordered'
+      write(2,*) 'DATAPACKING=POINT'
+      write(2,'(2E18.10)') b(1:2,:,1)! - dble(M)
+      close(2)
+
+      do k=1, nbp
+        i = int(b(1,k,1))
+        j = int(b(2,K,1))
+        T(i  ,j  ) = bsch(i  ,j  ) !sqrt((dble(i  )-b(1,k,1))**2 + (dble(j  )-b(2,k,1))**2)
+        T(i+1,j  ) = bsch(i+1,j  ) !sqrt((dble(i+1)-b(1,k,1))**2 + (dble(j  )-b(2,k,1))**2)
+        T(i  ,j+1) = bsch(i  ,j+1) !sqrt((dble(i  )-b(1,k,1))**2 + (dble(j+1)-b(2,k,1))**2)
+        T(i+1,j+1) = bsch(i+1,j+1) !sqrt((dble(i+1)-b(1,k,1))**2 + (dble(j+1)-b(2,k,1))**2)
+        s(i:i+1,j:j+1) = 0
+      end do
+
+      ! Call the FS subroutine
+      call fs
+
+      ! Output results
+      open (1,file='fm.g')
+      write(1,*) N, N
+      write(1,*) ((DBLE(i), i=1, N), j=1, N), ((DBLE(j), i=1, N), j=1, N)
+      close(1)
+
+      open (2,file='fm.q')
+      write(2,*) N, N
+      write(2,*) 1.0, 1.0, 1.0, 1.0
+      write(2,*) ((T(i,j), i=1, N), j=1, N)
+      write(2,*) ((T(i,j), i=1, N), j=1, N)
+      write(2,*) ((T(i,j), i=1, N), j=1, N)
+      write(2,*) ((T(i,j), i=1, N), j=1, N)
+      close(2)
+
+    end program
+!---------------------------------------------------------<
+
+
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    subroutine fs
+      use fsdata
+      implicit none
+
+      integer(4) :: ij(2), i, j, it, k, l
+      real(8)    :: cmp, Tw, Te, Ts, Tn, Tij, Fij
+
+      integer(4) :: gi(3,4)
+      integer(4) :: sj(3,4)
+
+      gi = reshape((/1, N, 1,  N, 1, -1,  N, 1, -1,  1, N, 1/), (/3, 4/))
+      sj = reshape((/1, N, 1,  1, N, 1,  N, 1, -1,  N, 1, -1/), (/3, 4/))
+
+      !Gauss-Seidel sweeping
+      do it=1, 4
+        do k=gi(1,it), gi(2,it), gi(3,it)
+          do l=sj(1,it), sj(2,it), sj(3,it)
+            i = k
+            j = l
+            if(i > 1) then
+              Tw = T(i-1,j)
+            else
+              Tw = T(i+1,j)
+            end if
+
+            if(i < N) then
+              Te = T(i+1,j)
+            else
+              Tw = T(i-1,j)
+            end if
+
+            if(j > 1) then
+              Ts = T(i,j-1)
+            else
+              Ts = T(i,j+1)
+            end if
+
+            if(j < N) then
+              Tn = T(i,j+1)
+            else
+              Tn = T(i,j-1)
+            end if
+            Fij = 1.0D0
+            call quad(Tw, Te, Ts, Tn, Tij, Fij)
+            if(s(i,j) > 0) T(i,j) = min(T(i,j), Tij)
+          end do
+        end do
+      end do
+
+    end subroutine
+!---------------------------------------------------------<
+
+
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    subroutine quad(Tw,Te,Ts,Tn,Tij,Fij)
+      implicit none
+      real(8) :: Tw, Te, Ts, Tn, Tij, Fij
+      real(8) :: a, b, x, f, h = 1.0D0
+
+      f = 1.0D0!/max(5.0D-1, Fij)
+      a = min(Tw, Te)
+      b = min(Ts, Tn)
+
+      if(dabs(a-b) >= f*h) then
+        x = min(a,b) + f*h
+      else
+        x = (a + b + dsqrt(2.0D0*(f*h)**2 - (a-b)**2)) / 2.0D0
+      end if
+
+      Tij = x
+
+      return
+    end subroutine
+!---------------------------------------------------------<
+
+
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    real(8) function xp(x)
+      implicit none
+      real(8) :: x
+
+      if(x > 0.0D0) then
+        xp = x
+      else
+        xp = 0.0D0
+      end if
+
+      return
+    end function
+!---------------------------------------------------------<
+
+
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
+    real(8) function bsch(i,j)
+      use fsdata
+      implicit none
+      integer(4) :: i
+      integer(4) :: j
+      integer(4) :: k
+
+      bsch = 1.0D10
+
+      do k=1, nbp
+        bsch = min(bsch, sqrt((dble(i)-b(1,k,1))**2 + (dble(j)-b(2,k,1))**2))
+      end do
+
+      return
+    end function
+!---------------------------------------------------------<
+
