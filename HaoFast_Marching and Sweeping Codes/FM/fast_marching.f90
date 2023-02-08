@@ -1,7 +1,10 @@
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
     module fmdata
-      integer(4) :: M = 151
+      ! Range of coordinates will be -M to M
+      integer(4) :: M = 201
       integer(4) :: N
+
+      ! NUmber of boundary points
       integer(4) :: nbp 
 
       integer(4), allocatable :: s(:,:)
@@ -400,6 +403,16 @@
       write(2,*) ((T(i,j), i=1, N), j=1, N)
       write(2,*) ((T(i,j), i=1, N), j=1, N)
       close(2)
+
+      open (3,file='fm.dat')
+      write(3,*) 'VARIABLES="X", "Y", "FM"'
+      do i = 1, N
+        do j = 1, N
+          if (DBLE(i-M) > -101 .and. DBLE(i-M) < 101 .and. DBLE(j-M) > -51 .and. DBLE(j-M) < 51) then
+            write(3,*) DBLE(i-M)/10, DBLE(j-M)/10, T(i,j)/10
+          end if
+        end do
+      end do
     end subroutine
 
 
