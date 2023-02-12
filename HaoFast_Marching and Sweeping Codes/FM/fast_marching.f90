@@ -1,7 +1,8 @@
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><
     module fmdata
-      ! Range of coordinates will be -M to M
-      integer(4) :: M = 201
+      ! -M is the starting point of coordinates in both axes
+      ! N is the range of coordinates
+      integer(4) :: M = 51
       integer(4) :: N
 
       ! NUmber of boundary points
@@ -36,8 +37,9 @@
       s = 2
 
       ! define the BCs & scaling
-      read (*,'(A)') fname
-      open (1, file=trim(fname))
+      ! read (*,'(A)') fname
+      ! open (1, file=trim(fname))
+      open (1, file="b_cetus_000.dat")
 
       read (1,*) c, nbp
       allocate(b(2,nbp,1))
@@ -408,7 +410,7 @@
       write(3,*) 'VARIABLES="X", "Y", "FM"'
       do i = 1, N
         do j = 1, N
-          if (DBLE(i-M) > -101 .and. DBLE(i-M) < 101 .and. DBLE(j-M) > -51 .and. DBLE(j-M) < 51) then
+          if (DBLE(i-M) > -26 .and. DBLE(i-M) < 26 .and. DBLE(j-M) > -36 .and. DBLE(j-M) < 36) then
             write(3,*) DBLE(i-M)/10, DBLE(j-M)/10, T(i,j)/10
           end if
         end do
